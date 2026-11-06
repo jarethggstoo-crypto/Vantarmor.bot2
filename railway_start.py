@@ -217,15 +217,10 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
-
         if path == "/config.json":
             settings = oauth_settings()
-            self.send_json({
-                "auth_enabled": bool(all(settings.values())),
-                "support_url": os.getenv("SUPPORT_URL", ""),
-            })
+            self.send_json({"auth_enabled": bool(all(settings.values())), "support_url": os.getenv("SUPPORT_URL", "")})
             return
-
         if path == "/api/premium/status":
             session = session_for(self)
             if not session:
@@ -234,27 +229,19 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
             user_id = int(session["user"].get("id", 0))
             self.send_json({"is_owner": user_id == premium_system.OWNER_ID, "premium": premium_system.has_premium(user_id)})
             return
-
         if path == "/auth/discord":
             settings = oauth_settings()
             if not all(settings.values()):
                 self.send_text("Falta configurar Discord OAuth en Railway.", 503)
                 return
             state = secrets.token_urlsafe(32)
-            query = urlencode({
-                "client_id": settings["client_id"],
-                "response_type": "code",
-                "redirect_uri": settings["redirect_uri"],
-                "scope": "identify guilds",
-                "state": state,
-            })
+            query = urlencode({"client_id": settings["client_id"], "response_type": "code", "redirect_uri": settings["redirect_uri"], "scope": "identify guilds", "state": state})
             self.send_response(302)
             self.send_header("Location", f"https://discord.com/oauth2/authorize?{query}")
             self.send_header("Set-Cookie", self.cookie_header("vantarmor_oauth_state", state, 600))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             return
-
         if path == "/auth/callback":
             query = parse_qs(urlparse(self.path).query)
             state = query.get("state", [""])[0]
@@ -270,7 +257,6 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
             if not all(settings.values()):
                 self.send_text("Falta configurar Discord OAuth en Railway.", 503)
                 return
-
             stage = "token_exchange"
             try:
                 token_data = exchange_code(code, settings)
@@ -280,10 +266,7 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 expires_in = max(60, int(token_data.get("expires_in", 3600)))
             except HTTPError as error:
                 error_code, description, metadata = discord_error_details(error)
-                print(
-                    f"Discord OAuth rechazado; etapa={stage}, HTTP={error.code}, "
-                    f"error={error_code}, detalle={description}, respuesta={json.dumps(metadata, ensure_ascii=False)}"
-                )
+                print(f"Discord OAuth rechazado; etapa={stage}, HTTP={error.code}, error={error_code}, detalle={description}, respuesta={json.dumps(metadata, ensure_ascii=False)}")
                 self.send_text(oauth_failure_message(stage, error.code, error_code), 502)
                 return
             except (URLError, TimeoutError) as error:
@@ -294,17 +277,9 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 print(f"Respuesta OAuth de Discord no válida; etapa={stage}, tipo={type(error).__name__}")
                 self.send_text("Discord devolvió una respuesta inesperada. Vuelve a iniciar sesión.", 502)
                 return
-
             session_id = secrets.token_urlsafe(32)
             with SESSIONS_LOCK:
-                SESSIONS[session_id] = {
-                    "access_token": access_token,
-                    "user": {
-                        "id": str(user.get("id", "")),
-                        "username": user.get("global_name") or user.get("username", "Discord"),
-                    },
-                    "expires_at": time.time() + expires_in,
-                }
+                SESSIONS[session_id] = {"access_token": access_token, "user": {"id": str(user.get("id", "")), "username": user.get("global_name") or user.get("username", "Discord")}, "expires_at": time.time() + expires_in}
             self.send_response(302)
             self.send_header("Location", "/?connected=1")
             self.send_header("Set-Cookie", self.cookie_header("vantarmor_session", session_id, expires_in))
@@ -312,7 +287,6 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             return
-
         if path == "/api/me":
             session = session_for(self)
             if not session:
@@ -320,7 +294,6 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 return
             self.send_json({"user": session["user"]})
             return
-
         if path == "/api/guilds":
             session = session_for(self)
             if not session:
@@ -330,10 +303,7 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 guilds = discord_request("/users/@me/guilds", session["access_token"])
             except HTTPError as error:
                 code, description, metadata = discord_error_details(error)
-                print(
-                    f"Consulta de servidores rechazada; HTTP={error.code}, error={code}, "
-                    f"detalle={description}, respuesta={json.dumps(metadata, ensure_ascii=False)}"
-                )
+                print(f"Consulta de servidores rechazada; HTTP={error.code}, error={code}, detalle={description}, respuesta={json.dumps(metadata, ensure_ascii=False)}")
                 self.send_json({"error": "guild_lookup_failed"}, 502)
                 return
             except (URLError, TimeoutError, ValueError) as error:
@@ -347,15 +317,9 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 except (TypeError, ValueError):
                     permissions = 0
                 if guild.get("owner") or permissions & (0x8 | 0x20):
-                    manageable.append({
-                        "id": str(guild.get("id", "")),
-                        "name": str(guild.get("name", "Servidor")),
-                        "icon": guild.get("icon"),
-                        "owner": bool(guild.get("owner")),
-                    })
+                    manageable.append({"id": str(guild.get("id", "")), "name": str(guild.get("name", "Servidor")), "icon": guild.get("icon"), "owner": bool(guild.get("owner"))})
             self.send_json({"guilds": manageable})
             return
-
         if path == "/auth/logout":
             session_id = get_cookie(self, "vantarmor_session")
             with SESSIONS_LOCK:
@@ -366,7 +330,6 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             return
-
         if path == "/" or path == "/index.html":
             html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
             script_tag = '<script src="/assets/navigation.js" defer></script>'
@@ -402,7 +365,6 @@ def start_website():
     print(f"Web iniciada en el puerto {port}")
 
 
-# Compatibility fix for older bot configurations that omit ticket_panel.
 source = APP_FILE.read_text(encoding="utf-8")
 start = source.find("CONFIG_DEFAULTS = {")
 if start == -1:
@@ -415,12 +377,11 @@ if '"ticket_panel"' not in defaults and "'ticket_panel'" not in defaults:
     updated, count = re.subn(r'("antilink"\s*:\s*\{\}\s*,?)', r'\1 "ticket_panel": {},', defaults, count=1)
     if count != 1:
         raise RuntimeError("No pude añadir ticket_panel a CONFIG_DEFAULTS en app.py.")
-    APP_FILE.write_text(source[:start] + updated + source[end:], encoding="utf-8")
-
+    source = source[:start] + updated + source[end:]
+    APP_FILE.write_text(source, encoding="utf-8")
 patch_app(APP_FILE)
-# Register Premium slash commands before app.py starts the Discord client.
 source = APP_FILE.read_text(encoding="utf-8")
-registration = "premium_system.register_commands(tree, discord, app_commands)"
+registration = "premium_system.register_commands(tree, discord, app_commands, GUILD)"
 if registration not in source:
     marker = "client.run(TOKEN)"
     if marker not in source:

@@ -90,9 +90,9 @@ def has_premium(user_id):
         return str(int(user_id)) in _read()["users"]
 
 
-def register_commands(tree, discord, app_commands):
-    """Register owner-only management and user key-redeem slash commands."""
-    @tree.command(name="premium-key", description="[Owner] Genera una key Premium de un solo uso")
+def register_commands(tree, discord, app_commands, guild):
+    """Register management commands in the same guild synced by app.py."""
+    @tree.command(name="premium-key", description="[Owner] Genera una key Premium de un solo uso", guild=guild)
     async def premium_key_command(interaction: discord.Interaction):
         if interaction.user.id != OWNER_ID:
             await interaction.response.send_message("No tienes permiso para administrar Premium.", ephemeral=True)
@@ -100,7 +100,7 @@ def register_commands(tree, discord, app_commands):
         key = issue_key(interaction.user.id)
         await interaction.response.send_message(f"Key Premium vitalicia (muéstrala solo al comprador):\n`{key}`", ephemeral=True)
 
-    @tree.command(name="premium-canjear", description="Canjea una key Premium de un solo uso")
+    @tree.command(name="premium-canjear", description="Canjea una key Premium de un solo uso", guild=guild)
     @app_commands.describe(key="Key Premium recibida")
     async def premium_redeem_command(interaction: discord.Interaction, key: str):
         if len(key) > 100:
@@ -109,7 +109,7 @@ def register_commands(tree, discord, app_commands):
         ok, message = redeem_key(interaction.user.id, key)
         await interaction.response.send_message(message, ephemeral=True)
 
-    @tree.command(name="premium-whitelist", description="[Owner] Activa Premium vitalicio sin key a un usuario")
+    @tree.command(name="premium-whitelist", description="[Owner] Activa Premium vitalicio sin key a un usuario", guild=guild)
     @app_commands.describe(usuario="Usuario al que otorgar Premium")
     async def premium_whitelist_command(interaction: discord.Interaction, usuario: discord.User):
         if interaction.user.id != OWNER_ID:
@@ -118,7 +118,7 @@ def register_commands(tree, discord, app_commands):
         grant_user(usuario.id, interaction.user.id)
         await interaction.response.send_message(f"Premium vitalicio activado para {usuario.mention} (ID `{usuario.id}`).", ephemeral=True)
 
-    @tree.command(name="premium-revocar", description="[Owner] Revoca el Premium de un usuario")
+    @tree.command(name="premium-revocar", description="[Owner] Revoca el Premium de un usuario", guild=guild)
     @app_commands.describe(usuario="Usuario al que quitar Premium")
     async def premium_revoke_command(interaction: discord.Interaction, usuario: discord.User):
         if interaction.user.id != OWNER_ID:
