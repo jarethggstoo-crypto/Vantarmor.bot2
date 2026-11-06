@@ -7,10 +7,15 @@ const menu = $('#side-menu');
 const menuToggle = $('#menu-toggle');
 const backdrop = $('#menu-backdrop');
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-}
-
+const views = ['inicio', 'funciones', 'estado', 'invitar', 'planes', 'ajustes'];
+const viewTitles = {
+  inicio: 'Inicio',
+  funciones: 'Funciones y comandos',
+  estado: 'Estado y protección',
+  invitar: 'Invitar bot',
+  planes: 'Planes',
+  ajustes: 'Ajustes',
+};
 const inviteBase = 'https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0';
 
 function setMenu(open) {
@@ -20,14 +25,53 @@ function setMenu(open) {
   menuToggle.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
   backdrop.hidden = !open;
 }
+
+function showView(view, updateHistory = false) {
+  const activeView = views.includes(view) ? view : 'inicio';
+  for (const id of views) {
+    const section = document.getElementById(id);
+    if (section) section.hidden = id !== activeView;
+  }
+  const intro = document.querySelector('.intro-strip');
+  if (intro) intro.hidden = activeView !== 'inicio';
+  const bottomCta = document.querySelector('.bottom-cta');
+  if (bottomCta) bottomCta.hidden = activeView !== 'inicio';
+
+  document.querySelectorAll('.menu-link').forEach((link) => {
+    const selected = link.getAttribute('href') === `#${activeView}`;
+    link.classList.toggle('active', selected);
+    if (selected) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+
+  document.title = `${viewTitles[activeView]} — Vantarmor Commands`;
+  if (updateHistory && location.hash !== `#${activeView}`) {
+    history.pushState({view: activeView}, '', `#${activeView}`);
+  }
+  setMenu(false);
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
 menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
 $('#menu-close').addEventListener('click', () => setMenu(false));
 backdrop.addEventListener('click', () => setMenu(false));
-document.querySelectorAll('.menu-link').forEach((link) => link.addEventListener('click', () => {
-  document.querySelectorAll('.menu-link').forEach((item) => item.classList.remove('active'));
-  link.classList.add('active');
-  setMenu(false);
-}));
+
+// Treat the menu and in-page calls to action as separate dashboard views,
+// rather than scrolling through one long landing page.
+document.querySelectorAll('a[href^="#"]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    const target = link.getAttribute('href').slice(1);
+    if (!views.includes(target)) return;
+    event.preventDefault();
+    showView(target, true);
+  });
+});
+window.addEventListener('popstate', () => showView(location.hash.slice(1) || 'inicio'));
+showView(location.hash.slice(1) || 'inicio');
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
 
 function drawGuilds(guilds) {
   guildGrid.replaceChildren();
