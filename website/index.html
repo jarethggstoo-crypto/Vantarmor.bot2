@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="description" content="Vantarmor: moderación, tickets y herramientas para tu comunidad de Discord.">
-  <title>Vantarmor — Tu comunidad, bajo control</title>
+  <meta name="theme-color" content="#050505">
+  <meta name="description" content="Vantarmor Commands: herramientas para proteger y administrar tu comunidad de Discord.">
+  <title>Vantarmor Commands</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -13,83 +13,52 @@
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
-  <div class="site-shell">
+  <div class="layout">
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Vantarmor inicio">
-        <span class="brand-mark" aria-hidden="true">V</span>
-        <span>VANTARMOR</span>
-      </a>
-      <nav class="top-links" aria-label="Navegación principal">
-        <a href="#funciones">Funciones</a>
-        <a href="#comandos">Comandos</a>
-        <a id="support-link" href="#" hidden>Soporte</a>
-      </nav>
-      <div id="account-area" class="account-area">
-        <a id="login-button" class="button button-small button-outline" href="/auth/discord">Iniciar sesión <span aria-hidden="true">↗</span></a>
-      </div>
+      <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="side-menu"><span></span><span></span><span></span></button>
+      <a class="brand" href="#inicio" aria-label="Vantarmor Commands inicio"><span class="brand-mark">V</span><span>VANTARMOR <b>COMMANDS</b></span></a>
+      <div class="top-actions"><span id="top-status" class="status-pill"><i></i> Web disponible</span><a id="login-button" class="button button-white button-small" href="/auth/discord">Iniciar sesión con Discord <span>↗</span></a><div id="profile-chip" class="profile-chip" hidden><span id="profile-avatar" class="avatar">V</span><span id="profile-name">Discord</span><a href="/auth/logout" class="logout-link">Salir</a></div></div>
     </header>
 
+    <div id="menu-backdrop" class="menu-backdrop" hidden></div>
+    <aside id="side-menu" class="side-menu" aria-label="Menú principal" aria-hidden="true">
+      <div class="menu-heading"><span>NAVEGACIÓN</span><button id="menu-close" type="button" aria-label="Cerrar menú">×</button></div>
+      <a class="menu-link active" href="#inicio"><span>⌂</span> Inicio</a>
+      <a class="menu-link" href="#funciones"><span>✦</span> Funciones y comandos</a>
+      <a class="menu-link" href="#estado"><span>◉</span> Estado</a>
+      <a class="menu-link" href="#invitar"><span>＋</span> Invitar bot</a>
+      <a class="menu-link" href="#planes"><span>◇</span> Planes</a>
+      <a class="menu-link" href="#ajustes"><span>⚙</span> Ajustes</a>
+      <div class="menu-bottom"><span class="tiny-mark">V</span><span>Tu comunidad, más segura.</span></div>
+    </aside>
+
     <main>
-      <section class="hero section-wrap">
-        <div class="hero-copy">
-          <div class="eyebrow"><span class="status-dot"></span> BOT DE DISCORD · MODERACIÓN Y COMUNIDAD</div>
-          <h1>Tu comunidad,<br><span class="gradient-text">bajo control.</span></h1>
-          <p class="hero-description">Moderación, tickets y herramientas útiles para mantener tu servidor organizado y a tu gente conectada.</p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0" target="_blank" rel="noopener noreferrer">Añadir a Discord <span aria-hidden="true">↗</span></a>
-            <a class="button button-quiet" href="#funciones">Explorar funciones <span aria-hidden="true">↓</span></a>
-          </div>
-          <div class="hero-note"><span class="note-icon">✦</span> Configúralo en Discord con comandos slash.</div>
-        </div>
-        <div class="hero-art" aria-label="Vista previa de Vantarmor">
-          <div class="orb orb-one"></div><div class="orb orb-two"></div>
-          <div class="bot-card">
-            <div class="bot-card-top"><span class="mini-mark">V</span><span>VANTARMOR</span><span class="online-pill"><i></i> EN LÍNEA</span></div>
-            <div class="bot-card-content">
-              <div class="bot-avatar">V</div>
-              <div><h2>¡Hola! Soy Vantarmor</h2><p>Listo para ayudar a tu comunidad.</p></div>
-            </div>
-            <div class="bot-card-stats"><div><strong>24/7</strong><span>disponible</span></div><div><strong>14+</strong><span>herramientas</span></div><div><strong>1 clic</strong><span>para invitar</span></div></div>
-            <div class="fake-command"><span class="slash">/</span><span>ticket-panel</span><span class="command-tag">COMANDO</span></div>
-            <div class="fake-command"><span class="slash">/</span><span>antispam</span><span class="command-tag">SEGURIDAD</span></div>
-            <div class="fake-command"><span class="slash">/</span><span>serverinfo</span><span class="command-tag">UTILIDAD</span></div>
-          </div>
-          <div class="floating-chip chip-ticket"><span>🎫</span> Tickets privados</div>
-          <div class="floating-chip chip-shield"><span>✦</span> Moderación segura</div>
-        </div>
+      <section id="inicio" class="hero page-width">
+        <div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> MODERACIÓN · SEGURIDAD · COMUNIDAD</div><h1>Tu servidor.<br><span class="shine">Tus reglas.</span></h1><p>Te damos la bienvenida a Vantarmor Commands. Una forma sencilla de organizar tickets, moderar y proteger el chat de tu comunidad.</p><div class="hero-buttons"><a class="button button-white" href="#invitar">Añadir Vantarmor <span>↗</span></a><a class="button button-ghost" href="#funciones">Ver comandos <span>↓</span></a></div><div class="hero-caption"><span>✳</span> Fácil de configurar desde Discord. Diseñado para comunidades.</div></div>
+        <div class="hero-visual"><div class="halo"></div><div class="preview-card"><div class="preview-top"><span class="mini-brand">V</span><span>VANTARMOR COMMANDS</span><span class="online"><i></i> ACTIVO</span></div><div class="welcome-box"><div class="welcome-avatar">V</div><div><strong>¡Bienvenido!</strong><p>Tu equipo de moderación está listo.</p></div></div><div class="preview-label">COMANDOS RÁPIDOS</div><div class="preview-command"><span>/</span><b>ticket-panel</b><small>Soporte</small></div><div class="preview-command"><span>/</span><b>antispam</b><small>Protección</small></div><div class="preview-command"><span>/</span><b>serverinfo</b><small>Información</small></div><div class="preview-footer"><span class="live-dot"></span> Herramientas listas para tu servidor</div></div><div class="float-tag tag-one">◈ Tickets ordenados</div><div class="float-tag tag-two">✦ Protección configurable</div></div>
       </section>
 
-      <section class="trust-row section-wrap" aria-label="Características principales">
-        <div><span class="trust-icon">◈</span><span>Hecho para Discord</span></div>
-        <div><span class="trust-icon">⌁</span><span>Configuración sencilla</span></div>
-        <div><span class="trust-icon">◇</span><span>Herramientas para tu comunidad</span></div>
+      <section class="intro-strip page-width"><div><span class="strip-icon">01</span><div><b>Una bienvenida bonita</b><small>Todo lo que tu comunidad necesita, en un solo bot.</small></div></div><div><span class="strip-icon">02</span><div><b>Control sencillo</b><small>Configura sus funciones con comandos de Discord.</small></div></div><div><span class="strip-icon">03</span><div><b>Protección configurable</b><small>Activa las herramientas que encajan con tu servidor.</small></div></div></section>
+
+      <section id="funciones" class="section page-width"><div class="section-title"><div><div class="eyebrow">FUNCIONES</div><h2>Herramientas claras.<br><span class="shine">Comandos útiles.</span></h2></div><p>Consulta qué hace cada comando. Los permisos de Discord y los ajustes del servidor determinan quién puede utilizar algunas herramientas.</p></div>
+        <div class="command-groups">
+          <article class="command-group"><div class="group-head"><span class="group-symbol">⌘</span><div><h3>Moderación</h3><p>Acciones para ayudar al equipo a mantener el orden.</p></div></div><div class="command-row"><code>/ban usuario</code><span>Banea a un miembro si tienes el permiso correspondiente.</span></div><div class="command-row"><code>/kick usuario</code><span>Expulsa a un miembro si tienes el permiso correspondiente.</span></div><div class="command-row"><code>/time out</code><span>Aísla temporalmente a un miembro durante una duración válida.</span></div><div class="command-row"><code>/purge cantidad</code><span>Elimina entre 1 y 100 mensajes del canal.</span></div><div class="command-row"><code>/lock · /unlock</code><span>Bloquea o desbloquea el canal actual.</span></div></article>
+          <article class="command-group"><div class="group-head"><span class="group-symbol">◈</span><div><h3>Tickets y seguridad</h3><p>Soporte privado y herramientas de protección.</p></div></div><div class="command-row"><code>/ticket-rol</code><span>Configura el rol que atenderá los tickets.</span></div><div class="command-row"><code>/ticket-categoria</code><span>Elige dónde se crearán los canales de tickets.</span></div><div class="command-row"><code>/ticket-panel</code><span>Publica el panel para que los miembros abran tickets.</span></div><div class="command-row"><code>/antispam</code><span>Activa o desactiva el filtro de mensajes repetidos.</span></div><div class="command-row"><code>/antilink</code><span>Activa o desactiva el filtro de enlaces.</span></div><div class="command-row"><code>/bloqueo_palabra</code><span>Añade una palabra o frase al filtro del servidor.</span></div></article>
+          <article class="command-group"><div class="group-head"><span class="group-symbol">✳</span><div><h3>Comunidad y utilidad</h3><p>Información y pequeñas herramientas para miembros.</p></div></div><div class="command-row"><code>/ping · /ayuda</code><span>Comprueba si el bot responde y consulta ayuda.</span></div><div class="command-row"><code>/serverinfo</code><span>Muestra información general del servidor.</span></div><div class="command-row"><code>/userinfo usuario</code><span>Muestra información de un miembro.</span></div><div class="command-row"><code>/avatar usuario</code><span>Muestra el avatar y, si existe, el banner.</span></div><div class="command-row"><code>/autorole rol</code><span>Configura un rol automático para nuevos miembros.</span></div><div class="command-row"><code>/afk · /invite</code><span>Indica ausencia o consulta invitaciones atribuidas durante esta sesión.</span></div><div class="command-row"><code>/juego button · /número</code><span>Inicia juegos sencillos de suerte o adivinanzas.</span></div></article>
+        </div><div class="command-note">Los comandos disponibles se muestran en Discord al escribir <code>/</code>. Algunas funciones requieren permisos del bot y del usuario. Los sorteos y el juego de galleta aún no están activos.</div>
       </section>
 
-      <section id="funciones" class="features-section section-wrap">
-        <div class="section-heading"><div class="eyebrow">TODO LO QUE NECESITAS</div><h2>Menos caos.<br><span class="gradient-text">Más comunidad.</span></h2><p>Herramientas prácticas para cuidar tu servidor sin complicar su administración.</p></div>
-        <div class="feature-grid">
-          <article class="feature-card feature-purple"><div class="feature-icon">🎫</div><h3>Tickets de soporte</h3><p>Crea paneles de tickets privados y organiza la atención con tu equipo.</p><span class="feature-label">SOPORTE</span></article>
-          <article class="feature-card feature-blue"><div class="feature-icon">🛡️</div><h3>Moderación</h3><p>Gestiona miembros, bloquea canales y limpia mensajes con controles de permisos.</p><span class="feature-label">SEGURIDAD</span></article>
-          <article class="feature-card feature-pink"><div class="feature-icon">✦</div><h3>Protección automática</h3><p>Activa filtros antispam, antilinks y bloqueo de palabras para cuidar el chat.</p><span class="feature-label">PROTECCIÓN</span></article>
-          <article class="feature-card feature-green"><div class="feature-icon">🎲</div><h3>Juegos y comunidad</h3><p>Dinámicas sencillas, estado AFK, sorteos y datos útiles para tus miembros.</p><span class="feature-label">COMUNIDAD</span></article>
-        </div>
-      </section>
+      <section id="estado" class="section status-section page-width"><div class="section-title"><div><div class="eyebrow">ESTADO Y PROTECCIÓN</div><h2>Más herramientas.<br><span class="shine">Sin promesas falsas.</span></h2></div><p>Las funciones ayudan a moderar, pero ningún bot puede garantizar que un servidor esté 100 % seguro. Revisa permisos, roles y configuración.</p></div><div class="status-grid"><article class="status-card"><span class="status-icon">◉</span><div class="status-label">Sitio web</div><strong id="web-state">Conectado</strong><small>Esta página responde desde Railway.</small></article><article class="status-card"><span class="status-icon">♧</span><div class="status-label">Bot de Discord</div><strong id="bot-state">Consulta en Discord</strong><small>El estado global en vivo se conectará en una próxima actualización.</small></article><article class="status-card"><span class="status-icon">▦</span><div class="status-label">Servidores del bot</div><strong id="bot-server-count">—</strong><small>No mostramos una cifra global hasta disponer de una fuente de estado en vivo.</small></article><article class="status-card protection-card"><span class="status-icon">✳</span><div class="status-label">Protecciones disponibles</div><strong>Antispam · Enlaces · Palabras</strong><small>Actívalas y comprueba que Vantarmor tenga permisos para gestionar mensajes.</small></article></div><div class="security-list"><div><span>✓</span> Filtro configurable de mensajes repetidos</div><div><span>✓</span> Eliminación de enlaces según configuración</div><div><span>✓</span> Bloqueo de palabras y frases elegidas por el equipo</div><div><span>!</span> No existe una garantía de seguridad porcentual</div></div></section>
 
-      <section id="servidores" class="dashboard-section section-wrap" hidden>
-        <div class="dashboard-heading"><div><div class="eyebrow">TU CUENTA</div><h2>Elige un servidor</h2><p>Servidores donde tienes permisos de administración.</p></div><button id="refresh-guilds" class="button button-outline button-small" type="button">Actualizar ↻</button></div>
-        <div id="guild-status" class="guild-status" aria-live="polite">Cargando tus servidores…</div>
-        <div id="guild-grid" class="guild-grid"></div>
-      </section>
+      <section id="invitar" class="section invite-section page-width"><div class="invite-copy"><div class="eyebrow">INVITA A VANTARMOR</div><h2>Elige dónde<br><span class="shine">quieres instalarlo.</span></h2><p>Inicia sesión con Discord para ver servidores donde tienes permisos de administración. Selecciona uno y Discord te permitirá confirmar la invitación.</p><a class="button button-white" href="/auth/discord">Ver mis servidores <span>↗</span></a></div><div class="server-panel"><div class="server-panel-head"><span>— SERVIDORES DISPONIBLES —</span><button id="refresh-guilds" type="button" aria-label="Actualizar servidores">↻</button></div><div id="guild-status" class="guild-status" aria-live="polite">Inicia sesión para cargar tus servidores.</div><div id="guild-grid" class="guild-grid"></div></div></section>
 
-      <section id="comandos" class="commands-section section-wrap">
-        <div class="commands-copy"><div class="eyebrow">FÁCIL DE USAR</div><h2>Todo empieza<br>con un <span class="gradient-text">/comando.</span></h2><p>Invita Vantarmor y configura sus herramientas directamente desde Discord. Los comandos disponibles aparecerán al escribir <code>/</code> en tu servidor.</p><a class="text-link" href="https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0" target="_blank" rel="noopener noreferrer">Invitar Vantarmor <span aria-hidden="true">→</span></a></div>
-        <div class="command-window"><div class="window-header"><div class="window-dots"><i></i><i></i><i></i></div><span># comandos</span><span class="window-lock">⌑</span></div><div class="command-list"><div><span class="command-slash">/</span><b>ticket-panel</b><span>Publica el panel de soporte</span></div><div><span class="command-slash">/</span><b>antispam</b><span>Configura protección contra spam</span></div><div><span class="command-slash">/</span><b>antilink</b><span>Controla los enlaces del servidor</span></div><div><span class="command-slash">/</span><b>autorole</b><span>Asigna rol a nuevos miembros</span></div><div><span class="command-slash">/</span><b>serverinfo</b><span>Consulta los datos del servidor</span></div><div><span class="command-slash">/</span><b>afk</b><span>Indica que estás ausente</span></div></div><div class="window-footer"><span class="status-dot"></span> Vantarmor está listo para ti</div></div>
-      </section>
+      <section id="planes" class="section plans-section page-width"><div class="section-title centered"><div><div class="eyebrow">PLANES</div><h2>Empieza gratis.<br><span class="shine">Crece a tu ritmo.</span></h2><p>El plan Premium se anunciará cuando sus funciones estén listas.</p></div></div><div class="plan-grid"><article class="plan-card"><div class="plan-top"><span>FREE</span><span class="plan-badge">DISPONIBLE</span></div><h3>Gratis</h3><p class="plan-price">$0 <small>para empezar</small></p><p>Herramientas esenciales para comenzar a organizar tu servidor.</p><ul><li>Tickets de soporte</li><li>Moderación y utilidades</li><li>Antispam, antilink y filtro de palabras</li><li>Juegos y comandos de comunidad disponibles</li></ul><a class="button button-white full-button" href="#invitar">Usar plan Free</a></article><article class="plan-card premium-card"><div class="plan-top"><span>PREMIUM</span><span class="plan-badge coming">PRÓXIMAMENTE</span></div><h3>Más adelante</h3><p class="plan-price">En preparación</p><p>Estamos definiendo las funciones Premium; todavía no está a la venta.</p><ul><li>Funciones Premium por anunciar</li><li>Sin cobros ni suscripciones habilitados</li><li>Te avisaremos cuando esté listo</li></ul><button class="button button-dark full-button" type="button" disabled>Próximamente</button></article></div></section>
 
-      <section class="cta-section section-wrap"><div class="cta-glow"></div><div class="eyebrow">EMPIEZA HOY</div><h2>Tu servidor merece<br><span class="gradient-text">un poco más de orden.</span></h2><p>Añade Vantarmor y conoce sus herramientas desde Discord.</p><a class="button button-primary" href="https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0" target="_blank" rel="noopener noreferrer">Añadir a Discord <span aria-hidden="true">↗</span></a></section>
+      <section id="ajustes" class="section settings-section page-width"><div class="section-title"><div><div class="eyebrow">AJUSTES DE CUENTA</div><h2>Tu perfil de Discord.</h2></div><p>La web solo muestra los datos básicos autorizados al iniciar sesión.</p></div><div class="settings-card"><div class="settings-profile"><span id="settings-avatar" class="avatar avatar-large">V</span><div><small>CUENTA CONECTADA</small><strong id="settings-name">No has iniciado sesión</strong><span id="settings-id">Conecta Discord para ver tu perfil.</span></div></div><a id="settings-login" class="button button-white button-small" href="/auth/discord">Conectar Discord</a><a id="settings-logout" class="button button-dark button-small" href="/auth/logout" hidden>Cerrar sesión</a></div></section>
+
+      <section class="bottom-cta page-width"><div><div class="eyebrow">VANTARMOR COMMANDS</div><h2>Hagamos tu comunidad<br>más ordenada.</h2></div><a class="button button-white" href="#invitar">Añadir el bot <span>↗</span></a></section>
     </main>
-
-    <footer class="footer section-wrap"><a class="brand footer-brand" href="/"><span class="brand-mark" aria-hidden="true">V</span><span>VANTARMOR</span></a><span>Hecho para comunidades de Discord.</span><a href="#inicio" class="back-top">Volver arriba ↑</a></footer>
+    <footer class="footer page-width"><a class="brand" href="#inicio"><span class="brand-mark">V</span><span>VANTARMOR <b>COMMANDS</b></span></a><span>Hecho para comunidades de Discord.</span><a href="#inicio">Volver arriba ↑</a></footer>
   </div>
 </body>
 </html>

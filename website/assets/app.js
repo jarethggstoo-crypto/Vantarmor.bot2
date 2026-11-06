@@ -1,27 +1,42 @@
 const $ = (selector) => document.querySelector(selector);
-const guildSection = $('#servidores');
 const guildGrid = $('#guild-grid');
 const guildStatus = $('#guild-status');
 const loginButton = $('#login-button');
-const accountArea = $('#account-area');
-const supportLink = $('#support-link');
+const profileChip = $('#profile-chip');
+const menu = $('#side-menu');
+const menuToggle = $('#menu-toggle');
+const backdrop = $('#menu-backdrop');
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
 
-function botInviteUrl() {
-  return 'https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0';
-}
+const inviteBase = 'https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0';
 
-function renderGuilds(guilds) {
+function setMenu(open) {
+  menu.classList.toggle('open', open);
+  menu.setAttribute('aria-hidden', String(!open));
+  menuToggle.setAttribute('aria-expanded', String(open));
+  menuToggle.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+  backdrop.hidden = !open;
+}
+menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
+$('#menu-close').addEventListener('click', () => setMenu(false));
+backdrop.addEventListener('click', () => setMenu(false));
+document.querySelectorAll('.menu-link').forEach((link) => link.addEventListener('click', () => {
+  document.querySelectorAll('.menu-link').forEach((item) => item.classList.remove('active'));
+  link.classList.add('active');
+  setMenu(false);
+}));
+
+function drawGuilds(guilds) {
   guildGrid.replaceChildren();
   if (!guilds.length) {
-    guildStatus.textContent = 'No encontramos servidores donde tengas permisos de administración. Puedes añadir Vantarmor desde el botón de invitación.';
+    guildStatus.textContent = 'No encontramos servidores donde tengas permisos para añadir bots. Comprueba tus permisos en Discord.';
     return;
   }
-  guildStatus.textContent = `Encontramos ${guilds.length} servidor${guilds.length === 1 ? '' : 'es'} que puedes administrar.`;
-  guilds.forEach((guild) => {
+  guildStatus.textContent = `Tus servidores disponibles para invitar: ${guilds.length}. Elige uno para continuar en Discord.`;
+  for (const guild of guilds) {
     const card = document.createElement('article');
     card.className = 'guild-card';
     const icon = document.createElement(guild.icon ? 'img' : 'div');
@@ -33,10 +48,10 @@ function renderGuilds(guilds) {
       icon.textContent = (guild.name || '?').slice(0, 1).toUpperCase();
     }
     const details = document.createElement('div');
-    details.innerHTML = `<div class="guild-name">${escapeHtml(guild.name || 'Servidor')}</div><a class="guild-action" href="${botInviteUrl()}&guild_id=${encodeURIComponent(guild.id)}&disable_guild_select=true" target="_blank" rel="noopener noreferrer">Añadir Vantarmor ↗</a>`;
+    details.innerHTML = `<div class="guild-name">${escapeHtml(guild.name || 'Servidor')}</div><a class="guild-action" href="${inviteBase}&guild_id=${encodeURIComponent(guild.id)}&disable_guild_select=true" target="_blank" rel="noopener noreferrer">Invitar Vantarmor ↗</a>`;
     card.append(icon, details);
     guildGrid.append(card);
-  });
+  }
 }
 
 async function loadGuilds() {
@@ -44,49 +59,43 @@ async function loadGuilds() {
   try {
     const response = await fetch('/api/guilds', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
     if (response.status === 401) {
-      guildStatus.textContent = 'Inicia sesión con Discord para ver tus servidores.';
+      guildStatus.textContent = 'Inicia sesión con Discord para consultar servidores donde puedes añadir el bot.';
       return;
     }
-    if (!response.ok) throw new Error('No pudimos consultar tus servidores. Inténtalo de nuevo.');
+    if (!response.ok) throw new Error('No pudimos cargar tus servidores. Inténtalo otra vez.');
     const data = await response.json();
-    renderGuilds(Array.isArray(data.guilds) ? data.guilds : []);
+    drawGuilds(Array.isArray(data.guilds) ? data.guilds : []);
   } catch (error) {
-    guildStatus.textContent = error.message || 'No pudimos consultar tus servidores.';
+    guildStatus.textContent = error.message || 'No pudimos cargar tus servidores.';
   }
+}
+
+function setProfile(user) {
+  const name = user?.username || 'Usuario de Discord';
+  const initial = name.trim().slice(0, 1).toUpperCase() || 'V';
+  profileChip.hidden = false;
+  loginButton.hidden = true;
+  $('#profile-name').textContent = name;
+  $('#profile-avatar').textContent = initial;
+  $('#settings-name').textContent = name;
+  $('#settings-id').textContent = user?.id ? `ID de Discord: ${user.id}` : 'Sesión iniciada con Discord';
+  $('#settings-avatar').textContent = initial;
+  $('#settings-login').hidden = true;
+  $('#settings-logout').hidden = false;
 }
 
 async function init() {
   try {
-    const configResponse = await fetch('/config.json', {credentials: 'same-origin'});
-    const config = await configResponse.json();
-    if (config.support_url) {
-      supportLink.href = config.support_url;
-      supportLink.target = '_blank';
-      supportLink.rel = 'noopener noreferrer';
-      supportLink.hidden = false;
-    }
-    const meResponse = await fetch('/api/me', {credentials: 'same-origin'});
-    if (meResponse.ok) {
-      const data = await meResponse.json();
-      guildSection.hidden = false;
-      loginButton.textContent = `Hola, ${data.user?.username || 'Discord'}`;
-      loginButton.href = '/auth/logout';
-      loginButton.classList.add('button-outline');
-      loginButton.setAttribute('aria-label', 'Cerrar sesión');
-      loginButton.insertAdjacentText('beforeend', ' · Salir');
+    const response = await fetch('/api/me', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+    if (response.ok) {
+      const data = await response.json();
+      setProfile(data.user || {});
       await loadGuilds();
     }
-    if (!config.auth_enabled) {
-      loginButton.title = 'El administrador debe configurar Discord OAuth en Railway.';
-      loginButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        alert('El inicio de sesión aún no está configurado. Añade DISCORD_CLIENT_SECRET y DISCORD_REDIRECT_URI en Railway.');
-      });
-    }
   } catch (_) {
-    // The public landing page remains available if OAuth is not configured.
+    // La página pública sigue disponible si no se puede consultar la sesión.
   }
 }
 
-$('#refresh-guilds')?.addEventListener('click', loadGuilds);
+$('#refresh-guilds').addEventListener('click', loadGuilds);
 init();
