@@ -12,8 +12,6 @@ const viewTitles = {
   inicio: 'Inicio', funciones: 'Funciones y comandos', estado: 'Estado y protección',
   invitar: 'Invitar bot', planes: 'Planes', ajustes: 'Ajustes',
 };
-// Requested Discord permissions: kick/ban, manage channels/messages/roles,
-// view/send messages, embeds/files/history, audit log, reactions and timeouts.
 const botPermissions = '1101927673046';
 const inviteBase = `https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=${botPermissions}`;
 
@@ -82,8 +80,6 @@ document.querySelectorAll('a[href^="#"]').forEach((link) => {
 window.addEventListener('popstate', () => showView(location.hash.slice(1) || 'inicio'));
 showView(location.hash.slice(1) || 'inicio');
 
-// A public invite link is available even before signing in. The server-specific
-// links below preselect a manageable server after Discord account verification.
 const inviteCopy = document.querySelector('#invitar .invite-copy');
 if (inviteCopy && !$('#public-invite-link')) {
   const link = document.createElement('a');
@@ -145,6 +141,83 @@ async function loadGuilds() {
   }
 }
 
+async function premiumRequest(path, payload) {
+  const response = await fetch(path, {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || data.error || 'No se pudo completar la solicitud.');
+  return data;
+}
+
+function addPremiumPanel(owner, premium) {
+  const card = document.querySelector('.premium-card');
+  if (!card || $('#premium-tools')) return;
+  const price = card.querySelector('.plan-price');
+  if (price) price.textContent = '$3 USD · pago único';
+  const description = card.querySelector('p:not(.plan-price)');
+  if (description) description.textContent = 'Premium vitalicio. El acceso se activa al canjear una key o cuando el propietario te añade a la whitelist.';
+  const list = card.querySelector('ul');
+  if (list) list.innerHTML = '<li>Comandos y funciones Premium cuando estén publicados</li><li>Protección y seguridad ampliadas en desarrollo</li><li>Acceso vitalicio tras activación</li><li>Un solo canje por key</li>';
+  const panel = document.createElement('div');
+  panel.id = 'premium-tools';
+  panel.className = 'premium-tools';
+  panel.innerHTML = `<div class="premium-access" aria-live="polite">${premium ? '✓ Premium vitalicio activo en tu cuenta.' : '¿Tienes una key? Canjéala para activar Premium.'}</div><form id="premium-redeem-form" class="premium-form"><label for="premium-key-input">Canjear key Premium</label><div class="premium-form-row"><input id="premium-key-input" name="key" maxlength="100" autocomplete="off" placeholder="VANTARMOR-…" required><button class="button button-white button-small" type="submit">Canjear</button></div><small id="premium-message" aria-live="polite"></small></form>${owner ? '<div class="owner-tools"><h4>Administración Premium · propietario</h4><button id="premium-generate-key" class="button button-white button-small" type="button">Generar key</button><code id="premium-generated-key" class="generated-key" hidden></code><small id="premium-owner-message" aria-live="polite"></small><form id="premium-grant-form" class="premium-form"><label for="premium-grant-id">Dar Premium sin key · ID de Discord</label><div class="premium-form-row"><input id="premium-grant-id" inputmode="numeric" pattern="[0-9]{17,20}" placeholder="ID de usuario" required><button class="button button-white button-small" type="submit">Autorizar</button></div></form><form id="premium-revoke-form" class="premium-form"><label for="premium-revoke-id">Revocar Premium · ID de Discord</label><div class="premium-form-row"><input id="premium-revoke-id" inputmode="numeric" pattern="[0-9]{17,20}" placeholder="ID de usuario" required><button class="button button-dark button-small" type="submit">Revocar</button></div></form></div>' : ''}`;
+  card.append(panel);
+
+  $('#premium-redeem-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const output = $('#premium-message');
+    output.textContent = 'Verificando…';
+    try {
+      const result = await premiumRequest('/api/premium/redeem', {key: $('#premium-key-input').value});
+      output.textContent = result.message;
+      $('.premium-access').textContent = '✓ Premium vitalicio activo en tu cuenta.';
+      $('#premium-key-input').value = '';
+    } catch (error) { output.textContent = error.message; }
+  });
+  if (!owner) return;
+  $('#premium-generate-key').addEventListener('click', async () => {
+    const output = $('#premium-owner-message');
+    output.textContent = 'Generando key…';
+    try {
+      const result = await premiumRequest('/api/premium/admin/key', {});
+      $('#premium-generated-key').hidden = false;
+      $('#premium-generated-key').textContent = result.key;
+      output.textContent = 'Guárdala ahora: solo se muestra una vez.';
+    } catch (error) { output.textContent = error.message; }
+  });
+  $('#premium-grant-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const output = $('#premium-owner-message');
+    try {
+      const result = await premiumRequest('/api/premium/admin/grant', {user_id: $('#premium-grant-id').value.trim()});
+      output.textContent = result.message;
+      $('#premium-grant-id').value = '';
+    } catch (error) { output.textContent = error.message; }
+  });
+  $('#premium-revoke-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const output = $('#premium-owner-message');
+    try {
+      const result = await premiumRequest('/api/premium/admin/revoke', {user_id: $('#premium-revoke-id').value.trim()});
+      output.textContent = result.message;
+      $('#premium-revoke-id').value = '';
+    } catch (error) { output.textContent = error.message; }
+  });
+}
+
+async function loadPremiumPanel() {
+  try {
+    const response = await fetch('/api/premium/status', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+    if (!response.ok) return;
+    const data = await response.json();
+    addPremiumPanel(Boolean(data.is_owner), Boolean(data.premium));
+  } catch (_) { /* El resto de la página sigue disponible. */ }
+}
+
 function setProfile(user) {
   const name = user?.username || 'Usuario de Discord';
   const initial = name.trim().slice(0, 1).toUpperCase() || 'V';
@@ -169,7 +242,7 @@ async function init() {
     const data = await response.json();
     setVerified(true);
     setProfile(data.user || {});
-    await loadGuilds();
+    await Promise.all([loadGuilds(), loadPremiumPanel()]);
   } catch (_) {
     setVerified(false);
   }

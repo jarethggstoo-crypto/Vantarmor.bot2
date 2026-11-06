@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from message_reactions_patch import patch_app
+import premium_system
 
 ROOT = Path(__file__).resolve().parent
 APP_FILE = ROOT / "app.py"
@@ -153,6 +154,67 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
     def cookie_header(name, value, max_age):
         return f"{name}={value}; Path=/; Max-Age={max_age}; HttpOnly; Secure; SameSite=Lax"
 
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if not path.startswith("/api/premium/"):
+            self.send_json({"error": "not_found"}, 404)
+            return
+        session = session_for(self)
+        if not session:
+            self.send_json({"error": "unauthenticated"}, 401)
+            return
+        if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+            self.send_json({"error": "json_required"}, 415)
+            return
+        origin = urlparse(self.headers.get("Origin", ""))
+        if not origin.netloc or origin.netloc.casefold() != self.headers.get("Host", "").casefold():
+            self.send_json({"error": "invalid_origin"}, 403)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 1 or length > 4096:
+                raise ValueError
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(body, dict):
+                raise ValueError
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+            self.send_json({"error": "invalid_request"}, 400)
+            return
+
+        user_id = int(session["user"].get("id", 0))
+        is_owner = user_id == premium_system.OWNER_ID
+        if path == "/api/premium/redeem":
+            key = str(body.get("key", ""))
+            if not key or len(key) > 100:
+                self.send_json({"error": "invalid_key", "message": "Escribe una key válida."}, 400)
+                return
+            ok, message = premium_system.redeem_key(user_id, key)
+            self.send_json({"ok": ok, "message": message}, 200 if ok else 400)
+            return
+        if not is_owner:
+            self.send_json({"error": "forbidden"}, 403)
+            return
+        if path == "/api/premium/admin/key":
+            key = premium_system.issue_key(user_id)
+            self.send_json({"ok": True, "key": key, "message": "Guarda esta key ahora; solo se mostrará una vez."})
+            return
+        if path in ("/api/premium/admin/grant", "/api/premium/admin/revoke"):
+            try:
+                target_id = int(str(body.get("user_id", "")))
+                if target_id <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                self.send_json({"error": "invalid_user_id", "message": "Escribe un ID de Discord válido."}, 400)
+                return
+            if path.endswith("/grant"):
+                premium_system.grant_user(target_id, user_id)
+                self.send_json({"ok": True, "message": f"Premium vitalicio activado para el usuario {target_id}."})
+            else:
+                existed = premium_system.revoke_user(target_id)
+                self.send_json({"ok": True, "message": "Premium revocado." if existed else "Ese usuario no tenía Premium activo."})
+            return
+        self.send_json({"error": "not_found"}, 404)
+
     def do_GET(self):
         path = urlparse(self.path).path
 
@@ -162,6 +224,15 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
                 "auth_enabled": bool(all(settings.values())),
                 "support_url": os.getenv("SUPPORT_URL", ""),
             })
+            return
+
+        if path == "/api/premium/status":
+            session = session_for(self)
+            if not session:
+                self.send_json({"error": "unauthenticated"}, 401)
+                return
+            user_id = int(session["user"].get("id", 0))
+            self.send_json({"is_owner": user_id == premium_system.OWNER_ID, "premium": premium_system.has_premium(user_id)})
             return
 
         if path == "/auth/discord":
@@ -297,7 +368,6 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
             return
 
         if path == "/" or path == "/index.html":
-            # Inject the authenticated dashboard navigation without changing the existing login shell.
             html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
             script_tag = '<script src="/assets/navigation.js" defer></script>'
             if script_tag not in html:
@@ -348,5 +418,14 @@ if '"ticket_panel"' not in defaults and "'ticket_panel'" not in defaults:
     APP_FILE.write_text(source[:start] + updated + source[end:], encoding="utf-8")
 
 patch_app(APP_FILE)
+# Register Premium slash commands before app.py starts the Discord client.
+source = APP_FILE.read_text(encoding="utf-8")
+registration = "premium_system.register_commands(tree, discord, app_commands)"
+if registration not in source:
+    marker = "client.run(TOKEN)"
+    if marker not in source:
+        raise RuntimeError("No encontré client.run(TOKEN) para registrar comandos Premium.")
+    source = source.replace(marker, registration + "\n\n" + marker, 1)
+    APP_FILE.write_text(source, encoding="utf-8")
 start_website()
 runpy.run_path(str(APP_FILE), run_name="__main__")
