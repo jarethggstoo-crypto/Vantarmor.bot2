@@ -32,6 +32,7 @@ function showView(view, updateHistory = false) {
     const section = document.getElementById(id);
     if (section) section.hidden = id !== activeView;
   }
+
   const intro = document.querySelector('.intro-strip');
   if (intro) intro.hidden = activeView !== 'inicio';
   const bottomCta = document.querySelector('.bottom-cta');
@@ -56,8 +57,6 @@ menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria
 $('#menu-close').addEventListener('click', () => setMenu(false));
 backdrop.addEventListener('click', () => setMenu(false));
 
-// Treat the menu and in-page calls to action as separate dashboard views,
-// rather than scrolling through one long landing page.
 document.querySelectorAll('a[href^="#"]').forEach((link) => {
   link.addEventListener('click', (event) => {
     const target = link.getAttribute('href').slice(1);
