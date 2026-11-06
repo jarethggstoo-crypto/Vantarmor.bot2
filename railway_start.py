@@ -387,6 +387,11 @@ if registration not in source:
     if marker not in source:
         raise RuntimeError("No encontré client.run(TOKEN) para registrar comandos Premium.")
     source = source.replace(marker, registration + "\n\n" + marker, 1)
-    APP_FILE.write_text(source, encoding="utf-8")
+# runpy executes app.py in a fresh namespace; make the imported helper available
+# there explicitly, including on deploys where an earlier launcher already
+# injected the registration call into app.py.
+if "import premium_system" not in source:
+    source = source.replace(registration, "import premium_system\n\n" + registration, 1)
+APP_FILE.write_text(source, encoding="utf-8")
 start_website()
-runpy.run_path(str(APP_FILE), run_name="__main__")
+runpy.run_path(str(APP_FILE), run_name="__main__", init_globals={"premium_system": premium_system})
