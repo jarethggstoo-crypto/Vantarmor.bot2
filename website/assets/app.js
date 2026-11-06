@@ -9,14 +9,33 @@ const backdrop = $('#menu-backdrop');
 
 const views = ['inicio', 'funciones', 'estado', 'invitar', 'planes', 'ajustes'];
 const viewTitles = {
-  inicio: 'Inicio',
-  funciones: 'Funciones y comandos',
-  estado: 'Estado y protección',
-  invitar: 'Invitar bot',
-  planes: 'Planes',
-  ajustes: 'Ajustes',
+  inicio: 'Inicio', funciones: 'Funciones y comandos', estado: 'Estado y protección',
+  invitar: 'Invitar bot', planes: 'Planes', ajustes: 'Ajustes',
 };
 const inviteBase = 'https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0';
+let discordVerified = false;
+
+function createVerificationGate() {
+  const style = document.createElement('style');
+  style.textContent = `.discord-gate{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:22px;background:rgba(0,0,0,.78);backdrop-filter:blur(12px)}.discord-gate-card{width:min(440px,100%);padding:32px;border:1px solid #444;border-radius:16px;background:linear-gradient(145deg,#151515,#080808);box-shadow:0 30px 100px #000;color:#f7f7f7;text-align:center}.discord-gate-mark{width:54px;height:54px;margin:0 auto 20px;display:grid;place-items:center;border-radius:15px;background:#fff;color:#050505;font:700 27px 'Space Grotesk',sans-serif}.discord-gate-card .gate-eyebrow{color:#aaa;font:700 9px 'DM Sans',sans-serif;letter-spacing:.18em}.discord-gate-card h2{margin:12px 0;font:600 27px 'Space Grotesk',sans-serif;letter-spacing:-.04em}.discord-gate-card p{color:#aaa;font:12px/1.7 'DM Sans',sans-serif;margin:0 auto 22px}.discord-gate-link{display:inline-flex;justify-content:center;align-items:center;gap:10px;padding:13px 20px;border-radius:8px;background:#fff;color:#050505;text-decoration:none;font:700 12px 'DM Sans',sans-serif}.discord-gate-note{display:block;color:#777;font:9px/1.6 'DM Sans',sans-serif;margin-top:16px}.discord-gate[hidden]{display:none!important}`;
+  document.head.append(style);
+  const gate = document.createElement('div');
+  gate.className = 'discord-gate';
+  gate.hidden = true;
+  gate.innerHTML = `<section class="discord-gate-card" role="dialog" aria-modal="true" aria-labelledby="discord-gate-title"><div class="discord-gate-mark" aria-hidden="true">V</div><div class="gate-eyebrow">VERIFICACIÓN DE CUENTA</div><h2 id="discord-gate-title">Continúa con Discord</h2><p>Para entrar a Vantarmor Commands, confirma tu identidad autorizando el inicio de sesión oficial de Discord.</p><a class="discord-gate-link" href="/auth/discord">Verificar con Discord <span aria-hidden="true">↗</span></a><small class="discord-gate-note">Nunca te pediremos la contraseña ni el token de tu cuenta. La autorización se realiza en Discord.</small></section>`;
+  document.body.append(gate);
+  return gate;
+}
+const verificationGate = createVerificationGate();
+function setVerified(value) {
+  discordVerified = value;
+  verificationGate.hidden = value;
+  document.body.classList.toggle('discord-verification-required', !value);
+  if (value) {
+    const status = $('#top-status');
+    if (status) status.innerHTML = '<i></i> Discord verificado';
+  }
+}
 
 function setMenu(open) {
   menu.classList.toggle('open', open);
@@ -32,23 +51,18 @@ function showView(view, updateHistory = false) {
     const section = document.getElementById(id);
     if (section) section.hidden = id !== activeView;
   }
-
   const intro = document.querySelector('.intro-strip');
   if (intro) intro.hidden = activeView !== 'inicio';
   const bottomCta = document.querySelector('.bottom-cta');
   if (bottomCta) bottomCta.hidden = activeView !== 'inicio';
-
   document.querySelectorAll('.menu-link').forEach((link) => {
     const selected = link.getAttribute('href') === `#${activeView}`;
     link.classList.toggle('active', selected);
     if (selected) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
-
   document.title = `${viewTitles[activeView]} — Vantarmor Commands`;
-  if (updateHistory && location.hash !== `#${activeView}`) {
-    history.pushState({view: activeView}, '', `#${activeView}`);
-  }
+  if (updateHistory && location.hash !== `#${activeView}`) history.pushState({view: activeView}, '', `#${activeView}`);
   setMenu(false);
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -56,7 +70,6 @@ function showView(view, updateHistory = false) {
 menuToggle.addEventListener('click', () => setMenu(menuToggle.getAttribute('aria-expanded') !== 'true'));
 $('#menu-close').addEventListener('click', () => setMenu(false));
 backdrop.addEventListener('click', () => setMenu(false));
-
 document.querySelectorAll('a[href^="#"]').forEach((link) => {
   link.addEventListener('click', (event) => {
     const target = link.getAttribute('href').slice(1);
@@ -130,13 +143,16 @@ function setProfile(user) {
 async function init() {
   try {
     const response = await fetch('/api/me', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
-    if (response.ok) {
-      const data = await response.json();
-      setProfile(data.user || {});
-      await loadGuilds();
+    if (!response.ok) {
+      setVerified(false);
+      return;
     }
+    const data = await response.json();
+    setVerified(true);
+    setProfile(data.user || {});
+    await loadGuilds();
   } catch (_) {
-    // La página pública sigue disponible si no se puede consultar la sesión.
+    setVerified(false);
   }
 }
 
