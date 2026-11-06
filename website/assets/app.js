@@ -12,8 +12,10 @@ const viewTitles = {
   inicio: 'Inicio', funciones: 'Funciones y comandos', estado: 'Estado y protección',
   invitar: 'Invitar bot', planes: 'Planes', ajustes: 'Ajustes',
 };
-const inviteBase = 'https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=0';
-let discordVerified = false;
+// Requested Discord permissions: kick/ban, manage channels/messages/roles,
+// view/send messages, embeds/files/history, audit log, reactions and timeouts.
+const botPermissions = '1101927673046';
+const inviteBase = `https://discord.com/oauth2/authorize?client_id=1567331667826311288&scope=bot%20applications.commands&permissions=${botPermissions}`;
 
 function createVerificationGate() {
   const style = document.createElement('style');
@@ -28,7 +30,6 @@ function createVerificationGate() {
 }
 const verificationGate = createVerificationGate();
 function setVerified(value) {
-  discordVerified = value;
   verificationGate.hidden = value;
   document.body.classList.toggle('discord-verification-required', !value);
   if (value) {
@@ -81,6 +82,24 @@ document.querySelectorAll('a[href^="#"]').forEach((link) => {
 window.addEventListener('popstate', () => showView(location.hash.slice(1) || 'inicio'));
 showView(location.hash.slice(1) || 'inicio');
 
+// A public invite link is available even before signing in. The server-specific
+// links below preselect a manageable server after Discord account verification.
+const inviteCopy = document.querySelector('#invitar .invite-copy');
+if (inviteCopy && !$('#public-invite-link')) {
+  const link = document.createElement('a');
+  link.id = 'public-invite-link';
+  link.className = 'button button-ghost public-invite-link';
+  link.href = inviteBase;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.innerHTML = 'Invitar directamente <span aria-hidden="true">↗</span>';
+  inviteCopy.append(link);
+  const note = document.createElement('small');
+  note.className = 'invite-permissions-note';
+  note.textContent = 'Discord te mostrará los permisos solicitados y te pedirá elegir el servidor. No necesita iniciar sesión en esta web.';
+  inviteCopy.append(note);
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
@@ -115,7 +134,7 @@ async function loadGuilds() {
   try {
     const response = await fetch('/api/guilds', {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
     if (response.status === 401) {
-      guildStatus.textContent = 'Inicia sesión con Discord para consultar servidores donde puedes añadir el bot.';
+      guildStatus.textContent = 'Inicia sesión con Discord para consultar servidores donde puedes añadir el bot. También puedes usar “Invitar directamente”.';
       return;
     }
     if (!response.ok) throw new Error('No pudimos cargar tus servidores. Inténtalo otra vez.');
