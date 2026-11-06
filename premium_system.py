@@ -56,14 +56,55 @@ def redeem_key(user_id, key):
     with _LOCK:
         data = _read()
         record = data["keys"].get(digest)
-        if not record:
-            return False, "La key no es válida."
+        if not record or record.get("revoked"):
+            return False, "La key no es válida o fue revocada."
         if record.get("redeemed_by"):
             return False, "Esta key ya fue canjeada."
         record["redeemed_by"] = uid
-        data["users"][uid] = {"source": "key", "granted_at": int(time.time()), "by": "key"}
+        data["users"][uid] = {
+            "source": "key",
+            "key_hash": digest,
+            "granted_at": int(time.time()),
+            "by": "key",
+        }
         _write(data)
     return True, "Premium vitalicio activado para tu cuenta."
+
+
+def revoke_key(key):
+    """Revoke a key and remove the entitlement it specifically granted, if linked."""
+    digest = _key_hash(key)
+    with _LOCK:
+        data = _read()
+        record = data["keys"].get(digest)
+        if not record:
+            return False, "No encontré esa key. No se modificó ningún Premium."
+        if record.get("revoked"):
+            return False, "Esa key ya estaba revocada."
+
+        record["revoked"] = True
+        record["revoked_at"] = int(time.time())
+        uid = str(record.get("redeemed_by") or "")
+        entitlement = data["users"].get(uid) if uid else None
+        removed = False
+        legacy_unlinked = False
+        if entitlement and entitlement.get("source") == "key":
+            if entitlement.get("key_hash") == digest:
+                data["users"].pop(uid, None)
+                removed = True
+            elif not entitlement.get("key_hash"):
+                # Older redemptions did not record which key granted Premium.
+                # Do not risk revoking another key's entitlement.
+                legacy_unlinked = True
+        _write(data)
+
+    if not uid:
+        return True, "Key revocada. No tenía un canje asociado."
+    if removed:
+        return True, f"Key revocada y Premium quitado al usuario {uid}."
+    if legacy_unlinked:
+        return True, f"Key revocada para el usuario {uid}; su acceso anterior no se pudo asociar con seguridad a esta key y no se quitó. Usa /premium-revocar con su ID para revocar manualmente."
+    return True, f"Key revocada. El usuario {uid} conserva Premium porque su acceso proviene de otra autorización."
 
 
 def grant_user(user_id, granted_by):
@@ -91,7 +132,7 @@ def has_premium(user_id):
 
 
 def register_commands(tree, discord, app_commands, guild):
-    """Register management commands in the same guild synced by app.py."""
+    """Register Premium key and owner management commands in the synced guild."""
     @tree.command(name="premium-key", description="[Owner] Genera una key Premium de un solo uso", guild=guild)
     async def premium_key_command(interaction: discord.Interaction):
         if interaction.user.id != OWNER_ID:
@@ -128,5 +169,18 @@ def register_commands(tree, discord, app_commands, guild):
             await interaction.response.send_message(f"Se revocó Premium a {usuario.mention}.", ephemeral=True)
         else:
             await interaction.response.send_message("Ese usuario no tenía Premium activo.", ephemeral=True)
+
+    @tree.command(name="key-revocar", description="[Owner] Revoca una key y su Premium asociado", guild=guild)
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(key="Key Premium que quieres revocar")
+    async def key_revoke_command(interaction: discord.Interaction, key: str):
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("No tienes permiso para revocar keys Premium.", ephemeral=True)
+            return
+        if not key.strip() or len(key) > 100:
+            await interaction.response.send_message("Escribe una key válida.", ephemeral=True)
+            return
+        success, message = revoke_key(key)
+        await interaction.response.send_message(message, ephemeral=True)
 
     return True
