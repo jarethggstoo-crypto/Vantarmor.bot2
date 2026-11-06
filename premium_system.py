@@ -38,41 +38,39 @@ def _key_hash(key):
     return hashlib.sha256(key.strip().upper().encode("utf-8")).hexdigest()
 
 
-def notify_discord_user(user_id, message):
-    """Best-effort private notice from the bot; entitlement remains saved if DM fails."""
-    token = os.getenv("DISCORD_TOKEN", "").strip()
-    if not token:
-        return False
-    headers = {
-        "Authorization": f"Bot {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "Vantarmor Premium",
-    }
+def has_premium(user_id):
+    with _LOCK:
+        return str(int(user_id)) in _read()["users"]
 
-    def discord_post(path, payload):
-        request = urllib.request.Request(
-            f"https://discord.com/api/v10{path}",
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=4) as response:
-            return json.loads(response.read().decode("utf-8"))
 
-    try:
-        dm = discord_post("/users/@me/channels", {"recipient_id": str(int(user_id))})
-        discord_post(f"/channels/{dm['id']}/messages", {"content": message})
+def premium_user_allowed(interaction):
+    """Use in every Premium-only command; never trust a client-side plan label."""
+    return interaction.user.id == OWNER_ID or has_premium(interaction.user.id)
+
+
+async def require_premium(interaction):
+    if premium_user_allowed(interaction):
         return True
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, ValueError, TypeError) as error:
-        print(f"No se pudo enviar notificación Premium por DM; tipo={type(error).__name__}")
-        return False
+    if not interaction.response.is_done():
+        await interaction.response.send_message(
+            "Este comando requiere Premium. Canjea una key Premium desde la web e inténtalo de nuevo.",
+            ephemeral=True,
+        )
+    else:
+        await interaction.followup.send(
+            "Este comando requiere Premium. Canjea una key Premium desde la web e inténtalo de nuevo.",
+            ephemeral=True,
+        )
+    return False
 
 
 def issue_key(created_by):
     raw = "VANTARMOR-" + secrets.token_urlsafe(18).replace("-", "").replace("_", "").upper()
     with _LOCK:
         data = _read()
-        data["keys"][_key_hash(raw)] = {"created_by": str(created_by), "created_at": int(time.time()), "redeemed_by": None}
+        data["keys"][_key_hash(raw)] = {
+            "created_by": str(created_by), "created_at": int(time.time()), "redeemed_by": None,
+        }
         _write(data)
     return raw
 
@@ -88,10 +86,13 @@ def redeem_key(user_id, key):
         if record.get("redeemed_by"):
             return False, "Esta key ya fue canjeada."
         record["redeemed_by"] = uid
-        data["users"][uid] = {"source": "key", "key_hash": digest, "granted_at": int(time.time()), "by": "key"}
+        data["users"][uid] = {
+            "source": "key", "key_hash": digest, "granted_at": int(time.time()), "by": "key",
+        }
+        # Do not claim activation if durable storage could not be written.
         _write(data)
-    notify_discord_user(uid, "✅ Tu cuenta de Discord ya tiene Premium vitalicio en Vantarmor. El bot reconoce tu acceso. Si aún no ves comandos Premium, vuelve a abrir Discord y consulta al administrador: las funciones Premium disponibles dependen de los comandos publicados por el bot.")
-    return True, "Premium vitalicio activado para tu cuenta de Discord. El bot fue avisado; revisa tus mensajes directos de Discord."
+    notify_discord_user(uid, "✅ Tu cuenta de Discord ya tiene Premium vitalicio en Vantarmor.")
+    return True, "Premium vitalicio activado para tu cuenta de Discord."
 
 
 def revoke_key(key):
@@ -122,7 +123,7 @@ def revoke_key(key):
     if not uid:
         return True, "Key revocada. No tenía un canje asociado."
     if legacy_unlinked:
-        return True, f"Key revocada para el usuario {uid}; su acceso anterior no se pudo asociar con seguridad a esta key y no se quitó. Usa /premium-revocar con su ID para revocar manualmente."
+        return True, f"Key revocada; el acceso anterior de {uid} no se pudo asociar de forma segura a esta key. Usa /premium-revocar con su ID para revocar manualmente."
     return True, f"Key revocada. El usuario {uid} conserva Premium porque su acceso proviene de otra autorización."
 
 
@@ -132,7 +133,7 @@ def grant_user(user_id, granted_by):
         data = _read()
         data["users"][uid] = {"source": "whitelist", "granted_at": int(time.time()), "by": str(granted_by)}
         _write(data)
-    notify_discord_user(uid, "✅ El propietario activó Premium vitalicio en tu cuenta de Vantarmor. El bot ya registra tu acceso.")
+    notify_discord_user(uid, "✅ El propietario activó Premium vitalicio en tu cuenta de Vantarmor.")
     return uid
 
 
@@ -148,27 +149,58 @@ def revoke_user(user_id):
     return existed
 
 
-def has_premium(user_id):
-    with _LOCK:
-        return str(int(user_id)) in _read()["users"]
+def notify_discord_user(user_id, message):
+    """Best-effort DM; Premium access remains saved even if DMs are closed."""
+    token = os.getenv("DISCORD_TOKEN", "").strip()
+    if not token:
+        return False
+    headers = {
+        "Authorization": f"Bot {token}", "Content-Type": "application/json",
+        "User-Agent": "Vantarmor Premium",
+    }
+
+    def post(path, payload):
+        request = urllib.request.Request(
+            f"https://discord.com/api/v10{path}",
+            data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=4) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    try:
+        dm = post("/users/@me/channels", {"recipient_id": str(int(user_id))})
+        post(f"/channels/{dm['id']}/messages", {"content": message})
+        return True
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, ValueError, TypeError) as error:
+        print(f"No se pudo enviar notificación Premium por DM; tipo={type(error).__name__}")
+        return False
 
 
 def register_commands(tree, discord, app_commands, guild):
+    """Register owner controls and Premium-gated commands in the synced guild."""
     @tree.command(name="premium-key", description="[Owner] Genera una key Premium de un solo uso", guild=guild)
     async def premium_key_command(interaction: discord.Interaction):
         if interaction.user.id != OWNER_ID:
             await interaction.response.send_message("No tienes permiso para administrar Premium.", ephemeral=True)
             return
-        key = issue_key(interaction.user.id)
+        try:
+            key = issue_key(interaction.user.id)
+        except OSError:
+            await interaction.response.send_message("No pude guardar la key. Comprueba el volumen persistente de Railway.", ephemeral=True)
+            return
         await interaction.response.send_message(f"Key Premium vitalicia (muéstrala solo al comprador):\n`{key}`", ephemeral=True)
 
     @tree.command(name="premium-canjear", description="Canjea una key Premium de un solo uso", guild=guild)
     @app_commands.describe(key="Key Premium recibida")
     async def premium_redeem_command(interaction: discord.Interaction, key: str):
-        if len(key) > 100:
+        if not key.strip() or len(key) > 100:
             await interaction.response.send_message("La key no es válida.", ephemeral=True)
             return
-        ok, message = redeem_key(interaction.user.id, key)
+        try:
+            ok, message = redeem_key(interaction.user.id, key)
+        except OSError:
+            await interaction.response.send_message("No pude guardar la activación Premium. Comprueba el volumen persistente de Railway.", ephemeral=True)
+            return
         await interaction.response.send_message(message, ephemeral=True)
 
     @tree.command(name="premium-whitelist", description="[Owner] Activa Premium vitalicio sin key a un usuario", guild=guild)
@@ -177,7 +209,11 @@ def register_commands(tree, discord, app_commands, guild):
         if interaction.user.id != OWNER_ID:
             await interaction.response.send_message("No tienes permiso para administrar Premium.", ephemeral=True)
             return
-        grant_user(usuario.id, interaction.user.id)
+        try:
+            grant_user(usuario.id, interaction.user.id)
+        except OSError:
+            await interaction.response.send_message("No pude guardar la autorización Premium. Comprueba el volumen de Railway.", ephemeral=True)
+            return
         await interaction.response.send_message(f"Premium vitalicio activado para {usuario.mention} (ID `{usuario.id}`).", ephemeral=True)
 
     @tree.command(name="premium-revocar", description="[Owner] Revoca el Premium de un usuario", guild=guild)
@@ -186,13 +222,17 @@ def register_commands(tree, discord, app_commands, guild):
         if interaction.user.id != OWNER_ID:
             await interaction.response.send_message("No tienes permiso para administrar Premium.", ephemeral=True)
             return
-        if revoke_user(usuario.id):
-            await interaction.response.send_message(f"Se revocó Premium a {usuario.mention}.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Ese usuario no tenía Premium activo.", ephemeral=True)
+        try:
+            existed = revoke_user(usuario.id)
+        except OSError:
+            await interaction.response.send_message("No pude guardar la revocación Premium.", ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Se revocó Premium a {usuario.mention}." if existed else "Ese usuario no tenía Premium activo.",
+            ephemeral=True,
+        )
 
     @tree.command(name="key-revocar", description="[Owner] Revoca una key y su Premium asociado", guild=guild)
-    @app_commands.default_permissions(administrator=True)
     @app_commands.describe(key="Key Premium que quieres revocar")
     async def key_revoke_command(interaction: discord.Interaction, key: str):
         if interaction.user.id != OWNER_ID:
@@ -201,7 +241,17 @@ def register_commands(tree, discord, app_commands, guild):
         if not key.strip() or len(key) > 100:
             await interaction.response.send_message("Escribe una key válida.", ephemeral=True)
             return
-        _, message = revoke_key(key)
+        try:
+            _, message = revoke_key(key)
+        except OSError:
+            await interaction.response.send_message("No pude guardar la revocación Premium.", ephemeral=True)
+            return
         await interaction.response.send_message(message, ephemeral=True)
+
+    @tree.command(name="premium-estado", description="Comprueba tu acceso Premium", guild=guild)
+    async def premium_status_command(interaction: discord.Interaction):
+        if not await require_premium(interaction):
+            return
+        await interaction.response.send_message("✅ Premium vitalicio activo para tu cuenta de Discord.", ephemeral=True)
 
     return True
