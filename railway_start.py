@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from message_reactions_patch import patch_app
-import premium_system
+import premium_antibots
 
 ROOT = Path(__file__).resolve().parent
 APP_FILE = ROOT / "app.py"
@@ -45,62 +45,35 @@ def get_cookie(handler, name):
 
 
 def discord_request(path, access_token):
-    request = Request(
-        f"{DISCORD_API}{path}",
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "User-Agent": f"Vantarmor (https://{PUBLIC_DOMAIN}, 1.0)",
-        },
-    )
+    request = Request(f"{DISCORD_API}{path}", headers={
+        "Authorization": f"Bearer {access_token}", "Accept": "application/json",
+        "User-Agent": f"Vantarmor (https://{PUBLIC_DOMAIN}, 1.0)",
+    })
     with urlopen(request, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def exchange_code(code, settings):
     import base64
-    body = urlencode({
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": settings["redirect_uri"],
-    }).encode("utf-8")
-    credentials = base64.b64encode(
-        f"{settings['client_id']}:{settings['client_secret']}".encode("utf-8")
-    ).decode("ascii")
-    request = Request(
-        f"{DISCORD_API}/oauth2/token",
-        data=body,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-            "User-Agent": f"Vantarmor (https://{PUBLIC_DOMAIN}, 1.0)",
-            "Authorization": f"Basic {credentials}",
-        },
-        method="POST",
-    )
+    body = urlencode({"grant_type": "authorization_code", "code": code, "redirect_uri": settings["redirect_uri"]}).encode("utf-8")
+    credentials = base64.b64encode(f"{settings['client_id']}:{settings['client_secret']}".encode("utf-8")).decode("ascii")
+    request = Request(f"{DISCORD_API}/oauth2/token", data=body, headers={
+        "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json",
+        "User-Agent": f"Vantarmor (https://{PUBLIC_DOMAIN}, 1.0)", "Authorization": f"Basic {credentials}",
+    }, method="POST")
     with urlopen(request, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def discord_error_details(error):
-    """Extract safe error fields and response metadata; never log credentials."""
     try:
-        raw = error.read(4096).decode("utf-8", errors="replace")
+        payload = json.loads(error.read(4096).decode("utf-8", errors="replace"))
     except (OSError, ValueError):
-        raw = ""
-    try:
-        payload = json.loads(raw) if raw else {}
-    except ValueError:
         payload = {}
     code = str(payload.get("error") or payload.get("code") or "unknown")[:80]
-    description = str(payload.get("error_description") or payload.get("message") or "")
-    description = " ".join(description.split())[:240] or "Sin cuerpo JSON"
-    response_headers = getattr(error, "headers", {})
-    metadata = {
-        key: str(response_headers.get(key, ""))[:120]
-        for key in ("Content-Type", "Server", "CF-Ray", "Retry-After")
-        if response_headers.get(key)
-    }
+    description = " ".join(str(payload.get("error_description") or payload.get("message") or "").split())[:240] or "Sin cuerpo JSON"
+    headers = getattr(error, "headers", {})
+    metadata = {key: str(headers.get(key, ""))[:120] for key in ("Content-Type", "Server", "CF-Ray", "Retry-After") if headers.get(key)}
     return code, description, metadata
 
 
@@ -108,10 +81,10 @@ def oauth_failure_message(stage, status, code):
     if code == "invalid_client":
         return "Discord rechazó las credenciales de la aplicación (invalid_client). Comprueba que el Client ID y Client Secret sean de la misma aplicación."
     if code == "invalid_grant":
-        return "Discord rechazó el código de autorización (invalid_grant). Reintenta desde la web y verifica que la URL de retorno coincida exactamente en Railway y Discord."
+        return "Discord rechazó el código de autorización. Reintenta y comprueba la URL de retorno configurada en Railway y Discord."
     if stage == "profile":
         return f"El inicio de sesión fue aceptado, pero Discord rechazó la consulta del perfil (HTTP {status}). Vuelve a iniciar sesión."
-    return f"Discord rechazó el intercambio OAuth (HTTP {status}, {code}). Comprueba los logs de Railway para ver los metadatos de respuesta."
+    return f"Discord rechazó el intercambio OAuth (HTTP {status}, {code}). Comprueba los logs de Railway."
 
 
 def session_for(handler):
@@ -154,80 +127,11 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
     def cookie_header(name, value, max_age):
         return f"{name}={value}; Path=/; Max-Age={max_age}; HttpOnly; Secure; SameSite=Lax"
 
-    def do_POST(self):
-        path = urlparse(self.path).path
-        if not path.startswith("/api/premium/"):
-            self.send_json({"error": "not_found"}, 404)
-            return
-        session = session_for(self)
-        if not session:
-            self.send_json({"error": "unauthenticated"}, 401)
-            return
-        if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
-            self.send_json({"error": "json_required"}, 415)
-            return
-        origin = urlparse(self.headers.get("Origin", ""))
-        if not origin.netloc or origin.netloc.casefold() != self.headers.get("Host", "").casefold():
-            self.send_json({"error": "invalid_origin"}, 403)
-            return
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length < 1 or length > 4096:
-                raise ValueError
-            body = json.loads(self.rfile.read(length).decode("utf-8"))
-            if not isinstance(body, dict):
-                raise ValueError
-        except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
-            self.send_json({"error": "invalid_request"}, 400)
-            return
-
-        user_id = int(session["user"].get("id", 0))
-        is_owner = user_id == premium_system.OWNER_ID
-        if path == "/api/premium/redeem":
-            key = str(body.get("key", ""))
-            if not key or len(key) > 100:
-                self.send_json({"error": "invalid_key", "message": "Escribe una key válida."}, 400)
-                return
-            ok, message = premium_system.redeem_key(user_id, key)
-            self.send_json({"ok": ok, "message": message}, 200 if ok else 400)
-            return
-        if not is_owner:
-            self.send_json({"error": "forbidden"}, 403)
-            return
-        if path == "/api/premium/admin/key":
-            key = premium_system.issue_key(user_id)
-            self.send_json({"ok": True, "key": key, "message": "Guarda esta key ahora; solo se mostrará una vez."})
-            return
-        if path in ("/api/premium/admin/grant", "/api/premium/admin/revoke"):
-            try:
-                target_id = int(str(body.get("user_id", "")))
-                if target_id <= 0:
-                    raise ValueError
-            except (TypeError, ValueError):
-                self.send_json({"error": "invalid_user_id", "message": "Escribe un ID de Discord válido."}, 400)
-                return
-            if path.endswith("/grant"):
-                premium_system.grant_user(target_id, user_id)
-                self.send_json({"ok": True, "message": f"Premium vitalicio activado para el usuario {target_id}."})
-            else:
-                existed = premium_system.revoke_user(target_id)
-                self.send_json({"ok": True, "message": "Premium revocado." if existed else "Ese usuario no tenía Premium activo."})
-            return
-        self.send_json({"error": "not_found"}, 404)
-
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/config.json":
             settings = oauth_settings()
             self.send_json({"auth_enabled": bool(all(settings.values())), "support_url": os.getenv("SUPPORT_URL", "")})
-            return
-        if path == "/api/premium/status":
-            session = session_for(self)
-            if not session:
-                self.send_json({"error": "unauthenticated"}, 401)
-                return
-            user_id = int(session["user"].get("id", 0))
-            self.send_json({"is_owner": user_id == premium_system.OWNER_ID, "premium": premium_system.has_premium(user_id)})
             return
         if path == "/auth/discord":
             settings = oauth_settings()
@@ -245,9 +149,9 @@ class WebsiteHandler(SimpleHTTPRequestHandler):
         if path == "/auth/callback":
             query = parse_qs(urlparse(self.path).query)
             state = query.get("state", [""])[0]
-            expected_state = get_cookie(self, "vantarmor_oauth_state")
+            expected = get_cookie(self, "vantarmor_oauth_state")
             code = query.get("code", [""])[0]
-            if not expected_state or not state or not secrets.compare_digest(state, expected_state):
+            if not expected or not state or not secrets.compare_digest(state, expected):
                 self.send_text("La verificación de seguridad falló. Vuelve a iniciar sesión desde la web.", 400)
                 return
             if query.get("error") or not code:
@@ -367,31 +271,22 @@ def start_website():
 
 source = APP_FILE.read_text(encoding="utf-8")
 start = source.find("CONFIG_DEFAULTS = {")
-if start == -1:
-    raise RuntimeError("No encontré CONFIG_DEFAULTS en app.py; revisa el código del bot.")
+if start < 0:
+    raise RuntimeError("No encontré CONFIG_DEFAULTS en app.py.")
 end = source.find("\n}", start)
-if end == -1:
+if end < 0:
     raise RuntimeError("CONFIG_DEFAULTS en app.py no parece estar cerrado correctamente.")
 defaults = source[start:end]
-if '"ticket_panel"' not in defaults and "'ticket_panel'" not in defaults:
-    updated, count = re.subn(r'("antilink"\s*:\s*\{\}\s*,?)', r'\1 "ticket_panel": {},', defaults, count=1)
-    if count != 1:
-        raise RuntimeError("No pude añadir ticket_panel a CONFIG_DEFAULTS en app.py.")
-    source = source[:start] + updated + source[end:]
-    APP_FILE.write_text(source, encoding="utf-8")
+for key in ("ticket_panel", "anti_bots"):
+    if f'"{key}"' not in defaults and f"'{key}'" not in defaults:
+        updated, count = re.subn(r'("antilink"\s*:\s*\{\}\s*,?)', rf'\1 "{key}": {{}},', defaults, count=1)
+        if count == 1:
+            source = source[:start] + updated + source[end:]
+            APP_FILE.write_text(source, encoding="utf-8")
+            start = source.find("CONFIG_DEFAULTS = {")
+            end = source.find("\n}", start)
+            defaults = source[start:end]
 patch_app(APP_FILE)
-source = APP_FILE.read_text(encoding="utf-8")
-registration = "premium_system.register_commands(tree, discord, app_commands, GUILD)"
-if registration not in source:
-    marker = "client.run(TOKEN)"
-    if marker not in source:
-        raise RuntimeError("No encontré client.run(TOKEN) para registrar comandos Premium.")
-    source = source.replace(marker, registration + "\n\n" + marker, 1)
-# runpy executes app.py in a fresh namespace; make the imported helper available
-# there explicitly, including on deploys where an earlier launcher already
-# injected the registration call into app.py.
-if "import premium_system" not in source:
-    source = source.replace(registration, "import premium_system\n\n" + registration, 1)
-APP_FILE.write_text(source, encoding="utf-8")
+premium_antibots.patch_app_file(APP_FILE)
 start_website()
-runpy.run_path(str(APP_FILE), run_name="__main__", init_globals={"premium_system": premium_system})
+runpy.run_path(str(APP_FILE), run_name="__main__", init_globals={"premium_system": __import__("premium_system")})
